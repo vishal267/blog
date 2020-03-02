@@ -41,12 +41,11 @@ kubectl get nodes
 
 ```
 
-
-2 - ALB Ingress Controller 
+<h2> ALB Ingress Controller </h2>
 
 Subnet Tags - 
 
-     kubernetes.io/role/internal-elb must be set to 1 or `` for internal LoadBalancers.
+    kubernetes.io/role/internal-elb must be set to 1 or `` for internal LoadBalancers.
     kubernetes.io/role/elb must be set to 1 or `` for internet-facing LoadBalancers.
 
 Create IAM policy - ingressController-iam-policy
@@ -152,8 +151,7 @@ spec:
               servicePort: 80
 ```
 
-
-Helm
+<h2> Helm </h2>
 
 Helm is a package manager for Kubernetes that allows developers and operators to more easily package, configure, and deploy applications and services onto Kubernetes clusters.
 
@@ -171,8 +169,7 @@ kubectl create clusterrolebinding tiller-cluster-rule --clusterrole=cluster-admi
 kubectl patch deploy --namespace kube-system tiller-deploy -p '{"spec":{"template":{"spec":{"serviceAccount":"tiller"}}}}'
 ```
 
-
-Monitoring Stack 
+<h2> Monitoring Stack  </h2>
 
 Deploy Prometheus using Persistent Storage
 
@@ -213,7 +210,7 @@ username admin
 kubectl get secret --namespace grafana grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
 ```
 
-Jenkins for CI
+<h2> Jenkins for CI </h2>
 
 ```
 helm install --name cicd stable/jenkins --set rbac.create=true,master.servicePort=80,master.serviceType=LoadBalancer
