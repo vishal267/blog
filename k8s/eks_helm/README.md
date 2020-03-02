@@ -1,5 +1,3 @@
-Kubernetes stack
-
 Setting EKS STACK
 
 EC2 instance with Access key and secret key in environment variable 
