@@ -1,227 +1,71 @@
-Setting EKS STACK
+Kubernetes (k8s) is an open-source system for automating deployment, scaling, and management of containerized applications.
+We can schedule containers on a cluster of servers.
+We can run multiple containers on one server.
+K8s manage the state of theses containers
+Advantages of Kubernetes
+We can run kubernetes on premise(Own datacenter) , public cloud (AWS , Google Cloud) and Hybrid cloud.
+It a open source software which have huge community base.
+Its modular which can be customised as per need.
+Architecture Overview
 
-EC2 instance with Access key and secret key in environment variable 
+ 
+Control Plane Components
+kube-apiserver
+etcd
+kube-controller
+kube-scheduler
+Master Node
+Responsible for the management of k8s cluster. Perform all administrative tasks and managing the worker nodes. Below are components of Master Node.
+Kube-apiserver
+Entry point for all REST commands used to control the cluster. It processes the REST requests, validates them and execute the same.
+etcd storage
+etcd storage acts as datastore which provide high available key value store for persisting cluster state. it stores object and config information.
+Kube-controller-manager
+Monitor the cluster state via the apiserver which check the shared state of the cluster and make changes to the current state to change it to desired one.
+Example - Replication controller which take care of the number of pods in the system. it will automatically maintain the desired state of pod defined in yaml file.
+Kube-Scheduler
+It is responsible for deployment of configured pods and services onto nodes. it contain the information regarding resources available on the members of cluster, as well as the ones required for the configured.
+Node Components
+kubelet
+kube-proxy
+pod
+Container Runtime Engine i.e Docker
+Worker Node
+The pods which contain the application are executed on worker node.It contain all services to manage the networking between the container, communicate with the master node and assign resources to the container scheduled. Below are components of worker node.
+Kubelet
+Kubelet gets the configuration of a pod from the apiserver and ensures that all defined containers are up and running. This is the worker service that's responsible for communicating with the master node. It also co-ordinate with etcd storage service running on master node to get information about services.
+Kube-proxy
+Kube-proxy acts as network proxy and a load balancer for a service on single worker node. Its also responsible for network routing for TCP and UDP packets.
+Pods
+Smallest unit of work of K8s , pods contains one or more containers that share volume, network and namespace.Pods are deployed on worker/minion node. Pods describe an application running on K8s. Pods are created, destroyed and recreated on demand based on the state of server and service
+Container Runtime Engine
+Docker is a container engine which runs on each of the worker nodes, and runs the configured pods. Its responsible for downloading the images and running the containers.
+Minikube - For Local setup
+Minikube is a tool that allow to run kubernetes cluster locally on single node.
+It run on single machine inside a linux virtual machine.
+Its used for testing and development purpose.
+It works on windows, Linux and MacOS.
+It required a virtualization software installed to run minikube.
+Install Virtual Box and minikube
+apt-get install virtualbox -y
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 && sudo install minikube-linux-amd64 /usr/local/bin/minikube
+Start K8s cluster using minikube
 
-Installing eksctl binary.
-
-
-```
-curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/latest_release/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
-eksctl version
-sudo mv -v /tmp/eksctl /usr/local/bin
-```
-       
-Create Cluster.yaml file - Instance type is t3.small and region is eu-north1
-
-```
-apiVersion: eksctl.io/v1alpha5
-kind: ClusterConfig
-
-metadata:
-  name: k8s-cluster
-  region: eu-north-1
-
-nodeGroups:
-  - name: ng-1
-    instanceType: t3.small
-    desiredCapacity: 3
-```
-
-Create the cluster using eksctl command 
-
-```
-eksctl  create cluster -f eks/cluster.yaml
-```
-
-Checking Cluster Health and Info 
-
-```
-Kubectl cluster-info
-kubectl get nodes 
-
-```
-
-
-2 - ALB Ingress Controller 
-
-Subnet Tags - 
-
-     kubernetes.io/role/internal-elb must be set to 1 or `` for internal LoadBalancers.
-    kubernetes.io/role/elb must be set to 1 or `` for internet-facing LoadBalancers.
-
-Create IAM policy - ingressController-iam-policy
-
-use this 
-
-https://raw.githubusercontent.com/kubernetes-sigs/aws-alb-ingress-controller/v1.0.0/docs/examples/iam-policy.json
-
-Attach this policy to node/worker role.
-
-Deploy RBAC Roles and RoleBindings
-
-```
- kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/aws-alb-ingress-controller/v1.0.0/docs/examples/rbac-role.yaml
-```
-
-deploy the AWS ALB Ingress controller
-```
-curl -sS "https://raw.githubusercontent.com/kubernetes-sigs/aws-alb-ingress-controller/v1.0.0/docs/examples/alb-ingress-controller.yaml" > alb-ingress-controller.yaml
-
-Edit the AWS ALB Ingress controller YAML to include the clusterName of the Kubernetes
-
-kubectl apply -f alb-ingress-controller.yaml
-kubectl get pods -n kube-system
-
-kubectl logs -n kube-system $(kubectl get po -n kube-system | egrep -o alb-ingress[a-zA-Z0-9-]+)
-```
-
-
-SSL For ALB 
-
-```
-# Generate self-signed certificate for a domain
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout tls.key -out tls.crt -subj "/CN=one.debian.com"
-
-# Add our new certificate to the AWS Certificate Manager
-aws acm import-certificate --certificate file://tls.crt --private-key file://tls.key --region us-north1
-
-```
-
-Deployment and Ingress configuration for Demo App
-```
-APP Deployment  file
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: blog
-spec:
-  selector:
-    matchLabels:
-      app: blog
-  replicas: 3
-  template:
-    metadata:
-      labels:
-        app: blog
-    spec:
-      containers:
-      - name: blog
-        image: dockersamples/static-site
-        env:
-        - name: AUTHOR
-          value: blog
-        ports:
-        - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app: blog
-  name: blog
-spec:
-  type: NodePort
-  ports:
-  - port: 80
-    protocol: TCP
-    targetPort: 80
-  selector:
-    app: blog
-
-Ingress file
-
-apiVersion: extensions/v1beta1
-kind: Ingress
-metadata:
-  name: blog
-  labels:
-    app: blog
-  annotations:
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-north-1:164366481040:certificate/xxxxxxxxx"
-spec:
-  rules:
-   - host: one.debian.com
-     http:
-        paths:
-          - path: /*
-            backend:
-              serviceName: blog
-              servicePort: 80
-```
-
-
-Helm
-
-Helm is a package manager for Kubernetes that allows developers and operators to more easily package, configure, and deploy applications and services onto Kubernetes clusters.
+Install kubectl binary
+curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/darwin/amd64/kubectl
+chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
+Check the kubernetes cluster info:
 
 
 
-Installation 
+Run a Echo server deployment with one pod. Below command will download a image which will run a container using this image.
 
-```
-#Helm Installation -
+Expose the Node port to host machine and check the minikube url using browser.
 
-helm init
+Open the URL "http://192.168.99.100:32351/"
 
-kubectl create serviceaccount --namespace kube-system tiller
-kubectl create clusterrolebinding tiller-cluster-rule --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
-kubectl patch deploy --namespace kube-system tiller-deploy -p '{"spec":{"template":{"spec":{"serviceAccount":"tiller"}}}}'
-```
+Stop the kubernetes cluster
+root@win:~# minikube stop
+Stopping local Kubernetes cluster...
+Machine stopped.
 
-
-Monitoring Stack 
-
-Deploy Prometheus using Persistent Storage
-
-```
-kubectl create namespace prometheus
-
-helm install --name prometheus stable/prometheus \
-    --namespace prometheus \
-    --set alertmanager.persistentVolume.storageClass="gp2" \
-    --set server.persistentVolume.storageClass="gp2"
-
-kubectl get all -n prometheus
-
-kubectl port-forward -n prometheus deploy/prometheus-server 8080:9090
-
-```
-
-Deploy Grafana using Persistent Storage
-
-```
-kubectl create namespace grafana
-helm install grafana stable/grafana \
-    --namespace grafana \
-    --set persistence.storageClassName="gp2" \
-    --set adminPassword='EKS!sAWSome' \
-    --set datasources."datasources\.yaml".apiVersion=1 \
-    --set datasources."datasources\.yaml".datasources[0].name=Prometheus \
-    --set datasources."datasources\.yaml".datasources[0].type=prometheus \
-    --set datasources."datasources\.yaml".datasources[0].url=http://prometheus-server.prometheus.svc.cluster.local \
-    --set datasources."datasources\.yaml".datasources[0].access=proxy \
-    --set datasources."datasources\.yaml".datasources[0].isDefault=true \
-    --set service.type=LoadBalancer
-
-kubectl get all -n grafana
-
-username admin
-
-kubectl get secret --namespace grafana grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
-```
-
-Jenkins for CI
-
-```
-helm install --name cicd stable/jenkins --set rbac.create=true,master.servicePort=80,master.serviceType=LoadBalancer
-
-kubectl get pods -w
-
-For Admin password 
-
-printf $(kubectl get secret --namespace default cicd-jenkins -o jsonpath="{.data.jenkins-admin-password}" | base64 --decode);echo
-
-```
