@@ -22,7 +22,6 @@ Edit the Ingress configuration in values.yaml. Endpoint "jenkins-one.debian.com"
 ```
 ingress:
     enabled: true
-    # For Kubernetes v1.14+, use 'networking.k8s.io/v1beta1'
     apiVersion: "extensions/v1beta1"
     labels: {}
     annotations:
@@ -39,7 +38,7 @@ helm install --name cicd stable/jenkins --set rbac.create=true -f values.yaml
 
 helm status cicd
 ``````
-Use endpoint "jenkins-one.debian.com" and password for admin user can fetch from below command.
+Use endpoint "jenkins-one.debian.com" to access the Jenkinsand password for admin user can fetch from below command.
 
 ```
 1. Get your 'admin' user password by running:
