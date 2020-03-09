@@ -2,7 +2,7 @@
 
 Ingress exposes HTTP and HTTPS routes from outside the cluster to services within the cluster. Traffic routing is controlled by rules defined on the Ingress resource.
 
-<h2>Nginx Ingress Controller <h2>
+<h2>Nginx Ingress Controller </h2>
 
 It is built around the Kubernetes Ingress resource, using a ConfigMap to store the NGINX configuration. We Will be using helm to Setup nginx ingress controller.
 
