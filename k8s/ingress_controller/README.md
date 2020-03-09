@@ -1,224 +1,117 @@
-<h2>Setting EKS STACK </h2>
+<h2>Ingress Controller </h2>
 
-EC2 instance with Access key and secret key in environment variable 
+Ingress exposes HTTP and HTTPS routes from outside the cluster to services within the cluster. Traffic routing is controlled by rules defined on the Ingress resource.
 
-Installing eksctl binary.
+<h2>Nginx Ingress Controller </h2>
 
-
-```
-curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/latest_release/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
-eksctl version
-sudo mv -v /tmp/eksctl /usr/local/bin
-```
-       
-Create Cluster.yaml file - Instance type is t3.small and region is eu-north1
+It is built around the Kubernetes Ingress resource, using a ConfigMap to store the NGINX configuration. We Will be using helm to Setup nginx ingress controller.
 
 ```
-apiVersion: eksctl.io/v1alpha5
-kind: ClusterConfig
+helm install \
+stable/nginx-ingress \
+--name my-nginx \
+--set rbac.create=true
 
-metadata:
-  name: k8s-cluster
-  region: eu-north-1
-
-nodeGroups:
-  - name: ng-1
-    instanceType: t3.small
-    desiredCapacity: 3
+helm status my-nginx 
 ```
 
-Create the cluster using eksctl command 
+<h2>Jenkins Setup using helm with Ingress Enabled. </h2>
+
+Edit the Ingress configuration in values.yaml. Endpoint "jenkins-one.debian.com"
 
 ```
-eksctl  create cluster -f eks/cluster.yaml
-```
-
-Checking Cluster Health and Info 
-
-```
-Kubectl cluster-info
-kubectl get nodes 
+ingress:
+    enabled: true
+    apiVersion: "extensions/v1beta1"
+    labels: {}
+    annotations:
+     kubernetes.io/ingress.class: nginx
+    hostName: jenkins-one.debian.com
+    tls:
 
 ```
 
-<h2> ALB Ingress Controller </h2>
-
-Subnet Tags - 
-
-    kubernetes.io/role/internal-elb must be set to 1 or `` for internal LoadBalancers.
-    kubernetes.io/role/elb must be set to 1 or `` for internet-facing LoadBalancers.
-
-Create IAM policy - ingressController-iam-policy
-
-use this 
-
-https://raw.githubusercontent.com/kubernetes-sigs/aws-alb-ingress-controller/v1.0.0/docs/examples/iam-policy.json
-
-Attach this policy to node/worker role.
-
-Deploy RBAC Roles and RoleBindings
+Helm to install the jenkins 
 
 ```
- kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/aws-alb-ingress-controller/v1.0.0/docs/examples/rbac-role.yaml
-```
+helm install --name cicd stable/jenkins --set rbac.create=true -f values.yaml
 
-deploy the AWS ALB Ingress controller
-```
-curl -sS "https://raw.githubusercontent.com/kubernetes-sigs/aws-alb-ingress-controller/v1.0.0/docs/examples/alb-ingress-controller.yaml" > alb-ingress-controller.yaml
-
-Edit the AWS ALB Ingress controller YAML to include the clusterName of the Kubernetes
-
-kubectl apply -f alb-ingress-controller.yaml
-kubectl get pods -n kube-system
-
-kubectl logs -n kube-system $(kubectl get po -n kube-system | egrep -o alb-ingress[a-zA-Z0-9-]+)
-```
-
-
-SSL For ALB 
+helm status cicd
+``````
+Use endpoint "jenkins-one.debian.com" to access the Jenkinsand password for admin user can fetch from below command.
 
 ```
-# Generate self-signed certificate for a domain
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout tls.key -out tls.crt -subj "/CN=one.debian.com"
+1. Get your 'admin' user password by running:
+  printf $(kubectl get secret --namespace default cicd-jenkins -o jsonpath="{.data.jenkins-admin-password}" | base64 --decode);echo
 
-# Add our new certificate to the AWS Certificate Manager
-aws acm import-certificate --certificate file://tls.crt --private-key file://tls.key --region us-north1
-
+2. Visit http://jenkins-one.debian.com
 ```
 
-Deployment and Ingress configuration for Demo App
-```
-APP Deployment  file
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: blog
-spec:
-  selector:
-    matchLabels:
-      app: blog
-  replicas: 3
-  template:
-    metadata:
-      labels:
-        app: blog
-    spec:
-      containers:
-      - name: blog
-        image: dockersamples/static-site
-        env:
-        - name: AUTHOR
-          value: blog
-        ports:
-        - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app: blog
-  name: blog
-spec:
-  type: NodePort
-  ports:
-  - port: 80
-    protocol: TCP
-    targetPort: 80
-  selector:
-    app: blog
+<h2>Setting up Monitoring Stack using helm </h2>
 
-Ingress file
-
-apiVersion: extensions/v1beta1
-kind: Ingress
-metadata:
-  name: blog
-  labels:
-    app: blog
-  annotations:
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-north-1:164366481040:certificate/xxxxxxxxx"
-spec:
-  rules:
-   - host: one.debian.com
-     http:
-        paths:
-          - path: /*
-            backend:
-              serviceName: blog
-              servicePort: 80
-```
-
-<h2> Helm </h2>
-
-Helm is a package manager for Kubernetes that allows developers and operators to more easily package, configure, and deploy applications and services onto Kubernetes clusters.
-
-
-
-Installation 
+Create the separate namesapce
 
 ```
-#Helm Installation -
-
-helm init
-
-kubectl create serviceaccount --namespace kube-system tiller
-kubectl create clusterrolebinding tiller-cluster-rule --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
-kubectl patch deploy --namespace kube-system tiller-deploy -p '{"spec":{"template":{"spec":{"serviceAccount":"tiller"}}}}'
+kubectl create namespace monitoring 
+kubectl get ns 
 ```
 
-<h2> Monitoring Stack  </h2>
-
-Deploy Prometheus using Persistent Storage
+Edit the Values.yaml and Add Ingress configurtions. Will be using persistentVolume for both prometheus and alertmanger. 
 
 ```
-kubectl create namespace prometheus
-
-helm install --name prometheus stable/prometheus \
+helm install --name monitoring stable/prometheus \
     --namespace prometheus \
     --set alertmanager.persistentVolume.storageClass="gp2" \
-    --set server.persistentVolume.storageClass="gp2"
-
-kubectl get all -n prometheus
-
-kubectl port-forward -n prometheus deploy/prometheus-server 8080:9090
-
+    --set server.persistentVolume.storageClass="gp2" -f values.yaml 
+    
+helm status prometheus
 ```
-
-Deploy Grafana using Persistent Storage
-
 ```
-kubectl create namespace grafana
-helm install grafana stable/grafana \
-    --namespace grafana \
+helm install --name grafana stable/grafana \
+    --namespace monitoring \
     --set persistence.storageClassName="gp2" \
-    --set adminPassword='EKS!sAWSome' \
+    --set adminPassword='DevOps*9002' \
     --set datasources."datasources\.yaml".apiVersion=1 \
     --set datasources."datasources\.yaml".datasources[0].name=Prometheus \
     --set datasources."datasources\.yaml".datasources[0].type=prometheus \
     --set datasources."datasources\.yaml".datasources[0].url=http://prometheus-server.prometheus.svc.cluster.local \
     --set datasources."datasources\.yaml".datasources[0].access=proxy \
-    --set datasources."datasources\.yaml".datasources[0].isDefault=true \
-    --set service.type=LoadBalancer
+    --set datasources."datasources\.yaml".datasources[0].isDefault=true -f values.yaml
+    
+ helm status grafana   
+ ```   
+    
 
-kubectl get all -n grafana
 
-username admin
+Prometheus and Alertmanager can access using below endpoint.
+    
+```
+The Prometheus server can be accessed via port 80 on the following DNS name from within your cluster:
+prometheus-server.prometheus.svc.cluster.local
 
-kubectl get secret --namespace grafana grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+From outside the cluster, the server URL(s) are:
+http://prometheus-one.debian.com
+
+From outside the cluster, the alertmanager URL(s) are:
+http://alertmanager-one.debian.com
+
 ```
 
-<h2> Jenkins for CI </h2>
+Grafana can be access using below endpoint.
 
 ```
-helm install --name cicd stable/jenkins --set rbac.create=true,master.servicePort=80,master.serviceType=LoadBalancer
+1. Get your 'admin' user password by running:
 
-kubectl get pods -w
+   kubectl get secret --namespace monitoring grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
 
-For Admin password 
+2. The Grafana server can be accessed via port 80 on the following DNS name from within your cluster:
 
-printf $(kubectl get secret --namespace default cicd-jenkins -o jsonpath="{.data.jenkins-admin-password}" | base64 --decode);echo
+   grafana.monitoring.svc.cluster.local
 
-```
+   From outside the cluster, the server URL(s) are:
+     http://grafana-one.debian.com
+
+```     
+     
+     
+
