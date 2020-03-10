@@ -4,7 +4,9 @@
 We will be deploying EFK stack for Logging in kubernetes cluster. 
 
 Elasticsearch - Its used to store logs in form of indexes. 
-Fluent-bit - Its used for collecting logs and processing the same. We will be running daemonsets of fluent-bit 
+
+Fluent-bit is an open source Log processor and forwarder. Its used for collecting logs from differenct sources, unify and semd them to multiple destinations. We will be running daemonsets of fluent-bit 
+
 kibana - It's provide interface for searching and visualizing logs.
 
 
