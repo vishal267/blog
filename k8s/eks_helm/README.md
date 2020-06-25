@@ -191,7 +191,7 @@ Deploy Grafana using Persistent Storage
 
 ```
 kubectl create namespace grafana
-helm install grafana stable/grafana \
+helm install --name grafana stable/grafana \
     --namespace grafana \
     --set persistence.storageClassName="gp2" \
     --set adminPassword='EKS!sAWSome' \
